@@ -330,20 +330,25 @@ def generate_itinerary():
         try:
             # 1. Recommendation (Fetch Community Data with personalized scoring)
             all_attractions = recommendation.get_top_attractions(destination, user_prefs=data)
+            print(f"DEBUG: Found {len(all_attractions)} attractions for {destination}")
             
             if not all_attractions:
+                print("DEBUG: Returning 404 - No attractions found")
                 return jsonify({
                     'message': f'No community data found for "{destination}" yet. To enable AI generation for new cities, please ensure your SambaNova and Serper API keys are set in the environment.'
                 }), 404
 
             # 2. MCTS (Select Attractions based on budget & rating)
             selected = mcts_selector.select_best_attractions(all_attractions, budget, duration=duration)
+            print(f"DEBUG: MCTS selected {len(selected)} places")
 
             if not selected:
+                print("DEBUG: Returning 400 - MCTS selected nothing")
                 return jsonify({'message': 'Could not select attractions within the specified budget. Try increasing your budget.'}), 400
 
             # 3. Fast TSP/LKH (Optimize Route)
             optimized_route = optimizer.solve_tsp_2opt(selected)
+            print(f"DEBUG: Optimizer returned {len(optimized_route)} places")
 
             # 4. Time Planner & Format
             # Attach distances to route
@@ -356,6 +361,7 @@ def generate_itinerary():
 
             city_transport_cost = recommendation.get_avg_transport_cost(destination, transport)
             final_plan = planner.build_itinerary(optimized_route, duration=duration, transport=transport, avg_travel_cost=city_transport_cost)
+            print(f"DEBUG: Planner built plan with {len(final_plan.get('days', []))} days")
             
             # 5. Add Stay & Intercity Travel Recommendation
             best_stay = recommendation.get_best_stay(destination, user_prefs=data)
