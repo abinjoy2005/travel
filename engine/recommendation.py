@@ -74,8 +74,8 @@ def get_top_attractions(destination, user_prefs=None, limit=30):
         
     conn.close()
     
-    # Sort by match score and rating
-    results.sort(key=lambda x: (x['match_score'], x['avg_rating']), reverse=True)
+    # Sort by match score and rating, handling potential None values
+    results.sort(key=lambda x: (x.get('match_score', 0.0) or 0.0, x.get('avg_rating', 0.0) or 0.0), reverse=True)
     return results[:limit]
 
 def get_travel_stats(destination):
