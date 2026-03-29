@@ -505,6 +505,13 @@ async function generateItinerary(e) {
 
         const data = await res.json();
 
+        if (!res.ok) {
+            alert(data.message || "Failed to generate itinerary. Try increasing your budget or checking your API keys.");
+            resetGenerateBtn();
+            showSection('planner-section');
+            return;
+        }
+
         // Let the UX loader finish its sequence before rendering
         setTimeout(() => {
             renderItinerary(data);
@@ -515,7 +522,7 @@ async function generateItinerary(e) {
         }, delayCounter + 500);
 
     } catch (err) {
-        alert("Failed to generate itinerary. Check console.");
+        alert("Failed to generate itinerary. Technical error: " + err.message);
         console.error(err);
         resetGenerateBtn();
         showSection('planner-section');
