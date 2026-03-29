@@ -46,8 +46,10 @@ class TravelCrew:
         """Initialize the crew."""
         super().__init__()
         # Fix: Configuration files are in the same directory as crew.py
-        self.agents_config = 'agents.yaml'
-        self.tasks_config = 'tasks.yaml'
+        import os
+        base_path = os.path.dirname(__file__)
+        self.agents_config = os.path.join(base_path, 'agents.yaml')
+        self.tasks_config = os.path.join(base_path, 'tasks.yaml')
         self.llm = LLM(model='sambanova/%s' % model_name)
         self.manager_llm = LLM(model='sambanova/%s' % model_name)
         self.planner_llm = LLM(model='sambanova/%s' % model_name)
@@ -155,8 +157,10 @@ class AddressSummaryCrew:
         """Initialize the crew."""
         super().__init__()
         # Fix: Configuration files are in the same directory as crew.py
-        self.agents_config = 'address_agents.yaml'
-        self.tasks_config = 'address_tasks.yaml'
+        import os
+        base_path = os.path.dirname(__file__)
+        self.agents_config = os.path.join(base_path, 'address_agents.yaml')
+        self.tasks_config = os.path.join(base_path, 'address_tasks.yaml')
         self.llm = LLM(model='sambanova/%s' % model_name)
 
     @typing.no_type_check

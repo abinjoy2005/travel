@@ -247,7 +247,7 @@ def generate_itinerary():
     guide_preferences = data.get("guide_preferences", "").strip()
 
     try:
-        from model.crew import TravelCrew
+        from model.model.crew import TravelCrew
         user_id = jwt.decode(request.cookies.get('token'), app.secret_key, algorithms=["HS256"])['user_id']
         add_xp_to_user(user_id, 25) # Planning a trip
 
