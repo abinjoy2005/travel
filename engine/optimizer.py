@@ -9,7 +9,7 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 def get_distance_matrix(attractions):
     """
     Creates a distance matrix for the selected attractions based on community data.
-    If no data exists for a pair, it uses a default distance (e.g. 10km).
+    Uses a single batch query for all pairs to improve performance.
     """
     names = [a['place_name'] for a in attractions]
     n = len(names)
@@ -17,37 +17,41 @@ def get_distance_matrix(attractions):
     for i in range(n):
         matrix[i][i] = 0.0
 
-    if not DATABASE_URL:
+    if not DATABASE_URL or n < 2:
         return matrix
 
     try:
         conn = psycopg2.connect(DATABASE_URL)
         c = conn.cursor()
         
-        for i in range(n):
-            for j in range(n):
-                if i == j: continue
-                
-                # Find any trip where i and j are adjacent
-                q = '''
-                    SELECT AVG(p2.distance_from_prev), AVG(p2.travel_rating)
-                    FROM places_visited p1
-                    JOIN places_visited p2 ON p1.trip_id = p2.trip_id 
-                    WHERE (p1.place_name = %s AND p2.place_name = %s AND p2.place_order = p1.place_order + 1)
-                       OR (p1.place_name = %s AND p2.place_name = %s AND p1.place_order = p2.place_order + 1)
-                '''
-                c.execute(q, (names[i], names[j], names[j], names[i]))
-                res = c.fetchone()
-                if res and res[0]:
-                    dist = res[0]
-                    rating = res[1] if res[1] else 3.0 # Default rating
-                    # "Cost" for TSP: lower is better. 
-                    # We divide distance by rating to prioritize higher-rated (better) paths.
-                    matrix[i][j] = dist / (rating / 3.0) 
+        # Batch query to find all relevant distances between any two places in the list
+        q = '''
+            SELECT p1.place_name, p2.place_name, AVG(p2.distance_from_prev), AVG(p2.travel_rating)
+            FROM places_visited p1
+            JOIN places_visited p2 ON p1.trip_id = p2.trip_id 
+            WHERE p1.place_name IN %s AND p2.place_name IN %s
+              AND ((p2.place_order = p1.place_order + 1) OR (p1.place_order = p2.place_order + 1))
+            GROUP BY p1.place_name, p2.place_name
+        '''
+        c.execute(q, (tuple(names), tuple(names)))
+        results = c.fetchall()
+        
+        # Map indices for quick lookup
+        name_to_idx = {name: i for i, name in enumerate(names)}
+        
+        for row in results:
+            p1_name, p2_name, dist, rating = row
+            if dist:
+                i, j = name_to_idx[p1_name], name_to_idx[p2_name]
+                rating = rating if rating else 3.0
+                matrix[i][j] = dist / (rating / 3.0)
+                # Keep it symmetric if only one direction exists
+                if matrix[j][i] == 10.0:
+                    matrix[j][i] = matrix[i][j]
                     
         conn.close()
     except Exception as e:
-        print(f"Optimizer Optimizer DB Error: {e}")
+        print(f"Optimizer Batch DB Error: {e}")
         
     return matrix
 

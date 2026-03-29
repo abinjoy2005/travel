@@ -327,57 +327,65 @@ def generate_itinerary():
         # Fallback to existing manual logic if CrewAI fails
         print("Falling back to manual engine logic...")
         
-        # 1. Recommendation (Fetch Community Data with personalized scoring)
-        all_attractions = recommendation.get_top_attractions(destination, user_prefs=data)
-        
-        if not all_attractions:
-            return jsonify({'message': f'No community data found for "{destination}" yet. Try registering a past trip first!'}), 404
-
-        # 2. MCTS (Select Attractions based on budget & rating)
-        selected = mcts_selector.select_best_attractions(all_attractions, budget, duration=duration)
-
-        # 3. Fast TSP/LKH (Optimize Route)
-        optimized_route = optimizer.solve_tsp_2opt(selected)
-
-        # 4. Time Planner & Format
-        # Attach distances to route
-        for i in range(len(optimized_route)):
-            if i > 0:
-                dist = recommendation.get_avg_distance(optimized_route[i-1]['place_name'], optimized_route[i]['place_name'])
-                optimized_route[i]['distance_to_prev'] = dist
-            else:
-                optimized_route[i]['distance_to_prev'] = 0.0
-
-        city_transport_cost = recommendation.get_avg_transport_cost(destination, transport)
-        final_plan = planner.build_itinerary(optimized_route, duration=duration, transport=transport, avg_travel_cost=city_transport_cost)
-        
-        # 5. Add Stay & Intercity Travel Recommendation
-        best_stay = recommendation.get_best_stay(destination, user_prefs=data)
-        if best_stay:
-            final_plan['stay'] = {
-                'name': best_stay['stay_name'],
-                'price': round(float(best_stay['avg_price']), 2),
-                'rating': round(float(best_stay['avg_rating']), 1)
-            }
+        try:
+            # 1. Recommendation (Fetch Community Data with personalized scoring)
+            all_attractions = recommendation.get_top_attractions(destination, user_prefs=data)
             
-        intercity = recommendation.get_best_intercity_travel(origin, destination)
-        if intercity:
-            final_plan['intercity_travel'] = {
-                'method': intercity['travel_method'],
-                'cost': round(float(intercity['avg_cost']), 2),
-                'rating': round(float(intercity['avg_rating']), 1)
-            }
-        
-        # --- Add Guides & Emergency if Requested ---
-        if need_guides:
-            final_plan['guide_contacts'] = get_guide_contacts(destination)
-        
-        final_plan['national_helplines'] = NATIONAL_HELPLINES
+            if not all_attractions:
+                return jsonify({
+                    'message': f'No community data found for "{destination}" yet. To enable AI generation for new cities, please ensure your SambaNova and Serper API keys are set in the environment.'
+                }), 404
 
-        final_plan['destination'] = destination
-        final_plan['budget'] = budget
+            # 2. MCTS (Select Attractions based on budget & rating)
+            selected = mcts_selector.select_best_attractions(all_attractions, budget, duration=duration)
 
-        return jsonify(final_plan)
+            if not selected:
+                return jsonify({'message': 'Could not select attractions within the specified budget. Try increasing your budget.'}), 400
+
+            # 3. Fast TSP/LKH (Optimize Route)
+            optimized_route = optimizer.solve_tsp_2opt(selected)
+
+            # 4. Time Planner & Format
+            # Attach distances to route
+            for i in range(len(optimized_route)):
+                if i > 0:
+                    dist = recommendation.get_avg_distance(optimized_route[i-1]['place_name'], optimized_route[i]['place_name'])
+                    optimized_route[i]['distance_to_prev'] = dist
+                else:
+                    optimized_route[i]['distance_to_prev'] = 0.0
+
+            city_transport_cost = recommendation.get_avg_transport_cost(destination, transport)
+            final_plan = planner.build_itinerary(optimized_route, duration=duration, transport=transport, avg_travel_cost=city_transport_cost)
+            
+            # 5. Add Stay & Intercity Travel Recommendation
+            best_stay = recommendation.get_best_stay(destination, user_prefs=data)
+            if best_stay:
+                final_plan['stay'] = {
+                    'name': best_stay['stay_name'],
+                    'price': round(float(best_stay['avg_price']), 2),
+                    'rating': round(float(best_stay['avg_rating']), 1)
+                }
+                
+            intercity = recommendation.get_best_intercity_travel(origin, destination)
+            if intercity:
+                final_plan['intercity_travel'] = {
+                    'method': intercity['travel_method'],
+                    'cost': round(float(intercity['avg_cost']), 2),
+                    'rating': round(float(intercity['avg_rating']), 1)
+                }
+            
+            # --- Add Guides & Emergency if Requested ---
+            if need_guides:
+                final_plan['guide_contacts'] = get_guide_contacts(destination)
+            
+            final_plan['national_helplines'] = NATIONAL_HELPLINES
+            final_plan['destination'] = destination
+            final_plan['budget'] = budget
+
+            return jsonify(final_plan)
+        except Exception as fallback_error:
+            print(f"Fallback Error: {str(fallback_error)}")
+            return jsonify({'message': f'Failed to generate itinerary for "{destination}". Technical error: {str(fallback_error)}'}), 500
 
 @app.route('/api/experiences', methods=['POST'])
 @token_required
